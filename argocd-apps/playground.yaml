@@ -1,0 +1,53 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: jellyfin
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/clanders1/k8s-lab-gitops.git
+    targetRevision: HEAD
+    path: apps/jellyfin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: jellyfin
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: homeassistant
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/clanders1/k8s-lab-gitops.git
+    targetRevision: HEAD
+    path: apps/homeassistant
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: homeassistant
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: llm
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/clanders1/k8s-lab-gitops.git
+    targetRevision: HEAD
+    path: apps/llm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: llm
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

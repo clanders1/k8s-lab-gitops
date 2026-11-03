@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nas-media
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [ro]
+  nfs:
+    server: 192.168.15.15
+    path: /mnt/Primary/Media
+    readOnly: true
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nas-music
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  capacity:
+    storage: 1Ti
+  accessModes: [ReadOnlyMany]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  mountOptions: [ro]
+  nfs:
+    server: 192.168.15.15
+    path: /mnt/Primary/Music
+    readOnly: true
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: nas-media
+  resources:
+    requests:
+      storage: 1Ti
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: music
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes: [ReadOnlyMany]
+  storageClassName: ""
+  volumeName: nas-music
+  resources:
+    requests:
+      storage: 1Ti
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config-k8s
+  annotations:
+    argocd.argoproj.io/sync-options: Prune=false
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: nutanix-volume-k8s
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+        - name: jellyfin
+          image: docker.io/jellyfin/jellyfin@sha256:fea863d0cd9ec445985d9c75fc6ed64e38a1d2766cf0c250a33d553f4fc1b771
+          ports:
+            - containerPort: 8096
+          env:
+            - name: JELLYFIN_PublishedServerUrl
+              value: http://192.168.15.61:8096
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 2Gi
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8096
+            initialDelaySeconds: 20
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /config
+            - name: cache
+              mountPath: /cache
+            - name: media
+              mountPath: /media
+              readOnly: true
+            - name: music
+              mountPath: /music
+              readOnly: true
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: jellyfin-config-k8s
+        - name: cache
+          emptyDir:
+            sizeLimit: 5Gi
+        - name: media
+          persistentVolumeClaim:
+            claimName: media
+            readOnly: true
+        - name: music
+          persistentVolumeClaim:
+            claimName: music
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin
+  annotations:
+    metallb.universe.tf/loadBalancerIPs: 192.168.15.61
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: jellyfin
+  ports:
+    - port: 8096
+      targetPort: 8096
